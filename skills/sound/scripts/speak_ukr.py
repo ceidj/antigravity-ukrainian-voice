@@ -4,6 +4,7 @@ import re
 import io
 import queue
 import threading
+import base64
 import winsound
 import scipy.signal
 from scipy.signal.windows import kaiser
@@ -47,16 +48,7 @@ def clean_text_for_speech(text: str) -> str:
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-def stream_speak(text: str, voice_name: str = "dmytro"):
-    """
-    Sentence-by-sentence streaming audio player (Producer-Consumer pipeline).
-    Plays purely in RAM (SND_MEMORY) without writing audio files to disk.
-    """
-    text = clean_text_for_speech(text)
-    sentences = split_sentences(text)
-    if not sentences:
-        return
-
+def get_voice(voice_name: str = "dmytro"):
     voice_map = {
         "dmytro": Voices.Dmytro.value,
         "tetiana": Voices.Tetiana.value,
@@ -64,8 +56,16 @@ def stream_speak(text: str, voice_name: str = "dmytro"):
         "mykyta": Voices.Mykyta.value,
         "oleksa": Voices.Oleksa.value,
     }
-    voice = voice_map.get(voice_name.lower(), Voices.Dmytro.value)
+    return voice_map.get(voice_name.lower(), Voices.Dmytro.value)
 
+def stream_speak(text: str, voice_name: str = "dmytro"):
+    """Plays audio sentence-by-sentence purely in RAM (SND_MEMORY)."""
+    text = clean_text_for_speech(text)
+    sentences = split_sentences(text)
+    if not sentences:
+        return
+
+    voice = get_voice(voice_name)
     tts = TTS()
     audio_queue = queue.Queue(maxsize=10)
 
@@ -84,7 +84,6 @@ def stream_speak(text: str, voice_name: str = "dmytro"):
     worker = threading.Thread(target=synthesizer, daemon=True)
     worker.start()
 
-    # Consumer thread plays chunks directly from RAM
     while True:
         wav_bytes = audio_queue.get()
         if wav_bytes is None:
@@ -94,14 +93,97 @@ def stream_speak(text: str, voice_name: str = "dmytro"):
 
     worker.join()
 
+def generate_widget(text: str, output_html_path: str, voice_name: str = "dmytro"):
+    """
+    Synthesizes text and embeds the WAV audio as Base64 directly into a
+    self-contained, interactive HTML button widget (for <agent-embed> in Antigravity).
+    """
+    text = clean_text_for_speech(text)
+    if not text:
+        return
+
+    voice = get_voice(voice_name)
+    tts = TTS()
+    buf = io.BytesIO()
+    tts.tts(text, voice, Stress.Dictionary.value, buf)
+    b64_audio = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    body {{ margin: 0; padding: 0; background: transparent; overflow: hidden; }}
+  </style>
+</head>
+<body class="bg-transparent antialiased py-1">
+  <div class="inline-flex items-center gap-2">
+    <button id="btn" onclick="togglePlay()" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#0057B7] hover:bg-[#004494] text-white font-medium text-xs shadow-sm transition-all cursor-pointer active:scale-95">
+      <span id="icon">🔊</span>
+      <span id="label">Озвучити відповідь</span>
+    </button>
+  </div>
+
+  <script>
+    const audio = new Audio("data:audio/wav;base64,{b64_audio}");
+    let isPlaying = false;
+
+    audio.onended = () => {{
+      resetUI();
+    }};
+
+    function togglePlay() {{
+      const icon = document.getElementById('icon');
+      const label = document.getElementById('label');
+      if (!isPlaying) {{
+        audio.play();
+        isPlaying = true;
+        icon.textContent = '⏹️';
+        label.textContent = 'Зупинити';
+      }} else {{
+        audio.pause();
+        audio.currentTime = 0;
+        resetUI();
+      }}
+    }}
+
+    function resetUI() {{
+      isPlaying = false;
+      document.getElementById('icon').textContent = '🔊';
+      document.getElementById('label').textContent = 'Озвучити відповідь';
+    }}
+  </script>
+</body>
+</html>
+"""
+    with open(output_html_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    print(f"Widget successfully written to {output_html_path}")
+
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        if sys.argv[1] == "--file" and len(sys.argv) > 2:
-            with open(sys.argv[2], "r", encoding="utf-8") as f:
+    args = sys.argv[1:]
+    
+    if "--widget" in args:
+        w_idx = args.index("--widget")
+        out_html = args[w_idx + 1]
+        args = args[:w_idx] + args[w_idx + 2:]
+        
+        if "--file" in args:
+            f_idx = args.index("--file")
+            with open(args[f_idx + 1], "r", encoding="utf-8") as f:
                 content = f.read()
         else:
-            content = " ".join(sys.argv[1:])
+            content = " ".join(args)
+        
+        generate_widget(content, out_html)
     else:
-        content = sys.stdin.read()
-    
-    stream_speak(content)
+        if len(args) > 0 and args[0] == "--file" and len(args) > 1:
+            with open(args[1], "r", encoding="utf-8") as f:
+                content = f.read()
+        elif len(args) > 0:
+            content = " ".join(args)
+        else:
+            content = sys.stdin.read()
+        
+        stream_speak(content)
