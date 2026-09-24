@@ -1,9 +1,9 @@
 import sys
 import os
 import re
+import io
 import queue
 import threading
-import tempfile
 import winsound
 import scipy.signal
 from scipy.signal.windows import kaiser
@@ -14,7 +14,7 @@ from ukrainian_tts.tts import TTS, Voices, Stress
 _SENTENCE_RE = re.compile(r'[^.!?;\n]+[.!?;\n]*')
 
 def split_sentences(text: str, max_len: int = 180):
-    """Split text into sentence chunks for pipeline streaming."""
+    """Split text into sentence chunks for streaming."""
     text = re.sub(r'\s+', ' ', text).strip()
     if not text:
         return []
@@ -50,7 +50,7 @@ def clean_text_for_speech(text: str) -> str:
 def stream_speak(text: str, voice_name: str = "dmytro"):
     """
     Sentence-by-sentence streaming audio player (Producer-Consumer pipeline).
-    Plays the first sentence immediately while synthesizing remaining sentences ahead.
+    Plays purely in RAM (SND_MEMORY) without writing audio files to disk.
     """
     text = clean_text_for_speech(text)
     sentences = split_sentences(text)
@@ -68,17 +68,15 @@ def stream_speak(text: str, voice_name: str = "dmytro"):
 
     tts = TTS()
     audio_queue = queue.Queue(maxsize=10)
-    temp_dir = tempfile.gettempdir()
 
     def synthesizer():
         for i, sentence in enumerate(sentences):
             if not sentence.strip():
                 continue
-            chunk_file = os.path.join(temp_dir, f"tts_chunk_{os.getpid()}_{i}.wav")
             try:
-                with open(chunk_file, "wb") as f:
-                    tts.tts(sentence, voice, Stress.Dictionary.value, f)
-                audio_queue.put(chunk_file)
+                buf = io.BytesIO()
+                tts.tts(sentence, voice, Stress.Dictionary.value, buf)
+                audio_queue.put(buf.getvalue())
             except Exception as e:
                 print(f"Помилка синтезу речення {i}: {e}", file=sys.stderr)
         audio_queue.put(None)
@@ -86,16 +84,12 @@ def stream_speak(text: str, voice_name: str = "dmytro"):
     worker = threading.Thread(target=synthesizer, daemon=True)
     worker.start()
 
-    # Consumer thread plays chunks sequentially
+    # Consumer thread plays chunks directly from RAM
     while True:
-        chunk_file = audio_queue.get()
-        if chunk_file is None:
+        wav_bytes = audio_queue.get()
+        if wav_bytes is None:
             break
-        winsound.PlaySound(chunk_file, winsound.SND_FILENAME)
-        try:
-            os.remove(chunk_file)
-        except OSError:
-            pass
+        winsound.PlaySound(wav_bytes, winsound.SND_MEMORY)
         audio_queue.task_done()
 
     worker.join()
