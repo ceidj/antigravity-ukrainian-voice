@@ -1,0 +1,26 @@
+{
+  "name": "ukrainian-voice",
+  "version": "1.0.0",
+  "description": "Українська озвучка Antigravity — офіційний плагін локального синтезу мови для Google Antigravity (AGY) через команди /s та /sound",
+  "author": {
+    "name": "Cei DJ (ceidj)",
+    "email": "cei.gmail@gmail.com",
+    "url": "https://github.com/ceidj"
+  },
+  "homepage": "https://github.com/ceidj/antigravity-ukrainian-voice",
+  "license": "MIT",
+  "keywords": [
+    "antigravity",
+    "google-antigravity",
+    "ukrainian-tts",
+    "tts",
+    "voice",
+    "speech-synthesis",
+    "ukrainian",
+    "українська озвучка",
+    "штучний інтелект",
+    "ai-agent",
+    "voice-assistant",
+    "sound"
+  ]
+}

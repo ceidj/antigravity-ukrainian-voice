@@ -1,0 +1,7 @@
+ukrainian-tts>=6.0.0
+torch
+espnet
+scipy
+soundfile
+kaldiio
+stanza
