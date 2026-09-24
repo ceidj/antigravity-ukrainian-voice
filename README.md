@@ -175,7 +175,6 @@ ukrainian-voice/
 ## 👨‍💻 Автор та копірайти
 
 * **Автор проєкту:** [ceidj (Cei DJ)](https://github.com/ceidj)
-* **Email:** [cei.gmail@gmail.com](mailto:cei.gmail@gmail.com)
 * **Telegram:** [@cei_DJ](https://t.me/cei_DJ)
 * **GitHub Репозиторій:** [https://github.com/ceidj/antigravity-ukrainian-voice](https://github.com/ceidj/antigravity-ukrainian-voice)
 
