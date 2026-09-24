@@ -4,6 +4,7 @@
 ### Ukrainian TTS Voice Plugin for Google Antigravity (AGY)
 
 [![Platform: Google Antigravity](https://img.shields.io/badge/Platform-Google_Antigravity-4285F4?style=for-the-badge&logo=google)](https://antigravity.google)
+[![Version: v1.1.0](https://img.shields.io/badge/Version-v1.1.0-brightgreen?style=for-the-badge&logo=github)](https://github.com/ceidj/antigravity-ukrainian-voice/releases)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![TTS: ukrainian--tts](https://img.shields.io/badge/TTS-ukrainian--tts-FFD700?style=for-the-badge&labelColor=0057B7)](https://github.com/robinhad/ukrainian-tts)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
