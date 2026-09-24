@@ -2,10 +2,10 @@
 
 ## Response Voice Badge (Always Active)
 
-At the end of EVERY substantive assistant response, you MUST append the graphical voice badge:
+At the end of EVERY substantive assistant response, you MUST append the compact graphical voice badge with fixed height:
 
 ---
-[![🔊 Озвучити відповідь](https://img.shields.io/badge/🔊_Озвучити_відповідь-/s-0057B7?style=flat-square)](#)  
+<a href="#speak"><img src="https://img.shields.io/badge/🔊_Озвучити_відповідь-/s-0057B7?style=flat-square" height="22" alt="Озвучити відповідь" /></a>  
 *💡 Надішліть `/s`, щоб прослухати цей текст голосом.*
 
 ## Audio Voice Commands (/s, /sound, /S sound)
