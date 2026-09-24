@@ -4,7 +4,7 @@
 ### Ukrainian TTS Voice Plugin for Google Antigravity (AGY)
 
 [![Platform: Google Antigravity](https://img.shields.io/badge/Platform-Google_Antigravity-4285F4?style=for-the-badge&logo=google)](https://antigravity.google)
-[![Version: v1.1.0](https://img.shields.io/badge/Version-v1.1.0-brightgreen?style=for-the-badge&logo=github)](https://github.com/ceidj/antigravity-ukrainian-voice/releases)
+[![Version: v1.2.0](https://img.shields.io/badge/Version-v1.2.0-brightgreen?style=for-the-badge&logo=github)](https://github.com/ceidj/antigravity-ukrainian-voice/releases)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![TTS: ukrainian--tts](https://img.shields.io/badge/TTS-ukrainian--tts-FFD700?style=for-the-badge&labelColor=0057B7)](https://github.com/robinhad/ukrainian-tts)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
@@ -45,8 +45,9 @@
 
 ## ✨ Ключові можливості
 
+- 🔘 **Графічна кнопка-бейдж у кожній відповіді**: Агент автоматично прикріплює наприкінці кожного повідомлення стильну плашку `[🔊 Озвучити відповідь]`. Достатньо просто надіслати `/s`, щоб прослухати її!
 - ⚡ **Потоковий плейлист речень (Low Latency)**: Текст більше не компілюється одним великим файлом! Він автоматично розбивається на окремі речення у потокову чергу: перше речення починає лунати практично миттєво, а наступні паралельно синтезуються у фоні під час відтворення попередніх без пауз.
-- 🔒 **100% Локально та Конфіденційно**: Аудіо синтезується на вашому комп'ютері без передачі коду чи тексту на сторонні хмарні сервери озвучення.
+- 🔒 **100% Локально та в RAM (Zero Disk I/O)**: Аудіо генерується виключно в оперативній пам'яті комп'ютера без створення сміттєвих файлів на диску та без передачі даних на сторонні сервери.
 - 🧹 **Розумне очищення тексту**: Вбудований фільтр автоматично прибирає з озвучки markdown-теги, блоки коду, технічні символи, хеші та URL-посилання, щоб мова звучала органічно, як жива розмова з колегою.
 - 🇺🇦 **Автентичні українські голоси**: Працює на базі перевірених моделей нейросинтезу (`Dmytro`, `Tetiana`, `Lada`, `Oleksa`, `Mykyta`) зі словниковим наголошуванням.
 - 🔌 **Нативна інтеграція з Antigravity**: Створено за офіційним стандартом Customization System (правила `AGENTS.md`, скіли `SKILL.md` та маніфест `plugin.json`).
