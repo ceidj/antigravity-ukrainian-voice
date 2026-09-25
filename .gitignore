@@ -4,3 +4,7 @@ __pycache__/
 *.wav
 *.mp3
 .venv/
+models/
+*.pth
+*.ark
+*.npz

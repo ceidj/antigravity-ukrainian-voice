@@ -19,6 +19,33 @@ CONFIG_PATH = os.path.expanduser("~/.gemini/config/plugins/ukrainian-voice/voice
 FFMPEG_PATH = r"C:\ffmpeg\bin\ffmpeg.exe"
 DEFAULT_SPEED = 1.3
 
+def get_models_dir() -> str:
+    env_dir = os.environ.get("UKR_TTS_CACHE")
+    if env_dir and os.path.exists(os.path.join(env_dir, "model.pth")):
+        return env_dir
+    repo_models = r"D:\___ new dev\antigravity-ukrainian-voice\models"
+    if os.path.exists(os.path.join(repo_models, "model.pth")):
+        return repo_models
+    plugin_models = os.path.expanduser("~/.gemini/config/plugins/ukrainian-voice/models")
+    if os.path.exists(os.path.join(plugin_models, "model.pth")):
+        return plugin_models
+    os.makedirs(plugin_models, exist_ok=True)
+    return plugin_models
+
+_TTS_INSTANCE = None
+
+def get_tts():
+    global _TTS_INSTANCE
+    if _TTS_INSTANCE is None:
+        models_dir = get_models_dir()
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(models_dir)
+            _TTS_INSTANCE = TTS(cache_folder=models_dir)
+        finally:
+            os.chdir(old_cwd)
+    return _TTS_INSTANCE
+
 def load_config() -> dict:
     if os.path.exists(CONFIG_PATH):
         try:
@@ -122,7 +149,7 @@ def stream_speak(text: str, voice_name: str = None, speed: float = None):
     if speed is None:
         speed = get_configured_speed()
     voice = get_voice(voice_name)
-    tts = TTS()
+    tts = get_tts()
     audio_queue = queue.Queue(maxsize=10)
 
     def synthesizer():
@@ -159,7 +186,7 @@ def generate_widget(text: str, output_html_path: str, voice_name: str = None, sp
     if speed is None:
         speed = get_configured_speed()
     voice = get_voice(voice_name)
-    tts = TTS()
+    tts = get_tts()
     buf = io.BytesIO()
     tts.tts(text, voice, Stress.Dictionary.value, buf)
     b64_audio = base64.b64encode(buf.getvalue()).decode("utf-8")
