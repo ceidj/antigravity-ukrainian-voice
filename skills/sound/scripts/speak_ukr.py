@@ -7,6 +7,7 @@ import queue
 import threading
 import subprocess
 import base64
+import struct
 import winsound
 import scipy.signal
 from scipy.signal.windows import kaiser
@@ -92,7 +93,13 @@ def apply_speed(wav_bytes: bytes, speed: float) -> bytes:
             stderr=subprocess.DEVNULL,
             check=True
         )
-        return proc.stdout
+        out = bytearray(proc.stdout)
+        if len(out) > 44:
+            struct.pack_into('<I', out, 4, len(out) - 8)
+            data_idx = out.find(b'data')
+            if data_idx != -1:
+                struct.pack_into('<I', out, data_idx + 4, len(out) - (data_idx + 8))
+        return bytes(out)
     except Exception:
         return wav_bytes
 
@@ -185,11 +192,23 @@ def generate_widget(text: str, output_html_path: str, voice_name: str = None, sp
 
     if speed is None:
         speed = get_configured_speed()
+    if not voice_name:
+        voice_name = get_configured_voice()
+
     voice = get_voice(voice_name)
     tts = get_tts()
     buf = io.BytesIO()
     tts.tts(text, voice, Stress.Dictionary.value, buf)
     b64_audio = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+    voice_titles = {
+        "dmytro": "Дмитро",
+        "tetiana": "Тетяна",
+        "lada": "Лада",
+        "mykyta": "Микита",
+        "oleksa": "Олекса",
+    }
+    voice_title = voice_titles.get(voice_name.lower(), "Дмитро")
 
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -197,47 +216,180 @@ def generate_widget(text: str, output_html_path: str, voice_name: str = None, sp
   <meta charset="utf-8">
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <style>
-    body {{ margin: 0; padding: 0; background: transparent; overflow: hidden; }}
+    body {{ margin: 0; padding: 0; background: transparent; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
+    .waveform-bar {{
+      display: inline-block;
+      width: 3px;
+      border-radius: 2px;
+      background: #0057B7;
+      animation: wave 1s ease-in-out infinite;
+    }}
+    .waveform-bar:nth-child(1) {{ height: 8px; animation-delay: 0.0s; }}
+    .waveform-bar:nth-child(2) {{ height: 16px; animation-delay: 0.2s; }}
+    .waveform-bar:nth-child(3) {{ height: 12px; animation-delay: 0.4s; }}
+    .waveform-bar:nth-child(4) {{ height: 18px; animation-delay: 0.1s; }}
+    .waveform-bar:nth-child(5) {{ height: 10px; animation-delay: 0.3s; }}
+    @keyframes wave {{
+      0%, 100% {{ transform: scaleY(0.4); opacity: 0.5; }}
+      50% {{ transform: scaleY(1.2); opacity: 1; }}
+    }}
+    .paused .waveform-bar {{
+      animation: none !important;
+      transform: scaleY(0.4) !important;
+      opacity: 0.3 !important;
+    }}
+    .progress-track {{
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 9999px;
+      cursor: pointer;
+      position: relative;
+      height: 6px;
+      transition: height 0.15s ease;
+    }}
+    .progress-track:hover {{
+      height: 8px;
+    }}
+    .progress-fill {{
+      background: linear-gradient(90deg, #0057B7 0%, #0080FF 70%, #FFD700 100%);
+      border-radius: 9999px;
+      height: 100%;
+      width: 0%;
+      position: relative;
+      transition: width 0.08s linear;
+    }}
   </style>
 </head>
 <body class="bg-transparent antialiased py-1">
-  <div class="inline-flex items-center gap-2">
-    <button id="btn" onclick="togglePlay()" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#0057B7] hover:bg-[#004494] text-white font-medium text-xs shadow-sm transition-all cursor-pointer active:scale-95">
-      <span id="icon">🔊</span>
-      <span id="label">Озвучити відповідь</span>
-      <span class="text-[10px] bg-white/20 px-1 py-0.5 rounded text-white/90">{speed}x</span>
+  <div class="inline-flex items-center gap-3 px-3 py-2 rounded-2xl bg-[#181825]/90 border border-[#313244] shadow-lg backdrop-blur-md max-w-lg select-none">
+    <!-- Play/Pause Button -->
+    <button id="playBtn" onclick="togglePlay()" class="w-9 h-9 shrink-0 rounded-full bg-gradient-to-tr from-[#0057B7] to-[#0070ea] hover:scale-105 active:scale-95 text-white flex items-center justify-center shadow-md transition-all cursor-pointer">
+      <svg id="playIcon" class="w-4 h-4 translate-x-0.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      <svg id="pauseIcon" class="w-4 h-4 fill-current hidden" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
     </button>
+
+    <!-- Waveform Visualizer -->
+    <div id="visualizer" class="flex items-center gap-0.5 h-5 shrink-0 paused">
+      <span class="waveform-bar"></span>
+      <span class="waveform-bar"></span>
+      <span class="waveform-bar"></span>
+      <span class="waveform-bar"></span>
+      <span class="waveform-bar"></span>
+    </div>
+
+    <!-- Center: Timeline & Time -->
+    <div class="flex flex-col gap-1 w-44 sm:w-56 shrink-0">
+      <div class="flex items-center justify-between text-[10px] text-[#a6adc8] font-mono leading-none">
+        <span id="currentTime">0:00</span>
+        <span class="text-[#6c7086]">/</span>
+        <span id="totalDuration">0:00</span>
+      </div>
+      <div id="progressTrack" class="progress-track w-full" onclick="seekAudio(event)">
+        <div id="progressFill" class="progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- Right: Badges -->
+    <div class="flex items-center gap-1.5 shrink-0 ml-1">
+      <!-- Voice badge -->
+      <span class="inline-flex items-center gap-1 text-[11px] font-medium text-[#cdd6f4] px-2 py-0.5 rounded-lg bg-[#313244]/60 border border-[#45475a]/40">
+        <span>🎙️</span>
+        <span id="voiceName">{voice_title}</span>
+      </span>
+
+      <!-- Speed toggle badge -->
+      <button onclick="cycleSpeed()" title="Клікніть щоб змінити швидкість" class="text-[11px] font-semibold text-[#f9e2af] px-2 py-0.5 rounded-lg bg-[#fab387]/10 hover:bg-[#fab387]/20 border border-[#fab387]/30 transition-all cursor-pointer active:scale-95">
+        <span id="speedLabel">{speed}x</span>
+      </button>
+    </div>
   </div>
 
   <script>
     const audio = new Audio("data:audio/wav;base64,{b64_audio}");
-    audio.playbackRate = {speed};
+    let currentSpeed = {speed};
+    audio.playbackRate = currentSpeed;
     let isPlaying = false;
+
+    const playIcon = document.getElementById('playIcon');
+    const pauseIcon = document.getElementById('pauseIcon');
+    const visualizer = document.getElementById('visualizer');
+    const progressFill = document.getElementById('progressFill');
+    const currentTimeEl = document.getElementById('currentTime');
+    const totalDurationEl = document.getElementById('totalDuration');
+    const speedLabel = document.getElementById('speedLabel');
+
+    function formatTime(secs) {{
+      if (isNaN(secs) || secs < 0) return "0:00";
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return m + ":" + (s < 10 ? "0" : "") + s;
+    }}
+
+    audio.onloadedmetadata = () => {{
+      totalDurationEl.textContent = formatTime(audio.duration / currentSpeed);
+    }};
+
+    audio.ontimeupdate = () => {{
+      if (!audio.duration) return;
+      const progress = (audio.currentTime / audio.duration) * 100;
+      progressFill.style.width = progress + '%';
+      currentTimeEl.textContent = formatTime(audio.currentTime / currentSpeed);
+      if (totalDurationEl.textContent === "0:00") {{
+        totalDurationEl.textContent = formatTime(audio.duration / currentSpeed);
+      }}
+    }};
 
     audio.onended = () => {{
       resetUI();
     }};
 
     function togglePlay() {{
-      const icon = document.getElementById('icon');
-      const label = document.getElementById('label');
       if (!isPlaying) {{
-        audio.playbackRate = {speed};
-        audio.play();
-        isPlaying = true;
-        icon.textContent = '⏹️';
-        label.textContent = 'Зупинити';
+        audio.playbackRate = currentSpeed;
+        audio.play().then(() => {{
+          isPlaying = true;
+          playIcon.classList.add('hidden');
+          pauseIcon.classList.remove('hidden');
+          visualizer.classList.remove('paused');
+        }}).catch(err => console.error(err));
       }} else {{
         audio.pause();
-        audio.currentTime = 0;
-        resetUI();
+        isPlaying = false;
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+        visualizer.classList.add('paused');
       }}
     }}
 
     function resetUI() {{
       isPlaying = false;
-      document.getElementById('icon').textContent = '🔊';
-      document.getElementById('label').textContent = 'Озвучити відповідь';
+      playIcon.classList.remove('hidden');
+      pauseIcon.classList.add('hidden');
+      visualizer.classList.add('paused');
+      progressFill.style.width = '0%';
+      currentTimeEl.textContent = "0:00";
+    }}
+
+    function seekAudio(e) {{
+      const track = document.getElementById('progressTrack');
+      const rect = track.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, clickX / rect.width));
+      if (audio.duration) {{
+        audio.currentTime = pct * audio.duration;
+        progressFill.style.width = (pct * 100) + '%';
+      }}
+    }}
+
+    const speeds = [1.0, 1.3, 1.5, 1.8];
+    function cycleSpeed() {{
+      const idx = speeds.indexOf(currentSpeed);
+      currentSpeed = speeds[(idx + 1) % speeds.length];
+      audio.playbackRate = currentSpeed;
+      speedLabel.textContent = currentSpeed + 'x';
+      if (audio.duration) {{
+        totalDurationEl.textContent = formatTime(audio.duration / currentSpeed);
+        currentTimeEl.textContent = formatTime(audio.currentTime / currentSpeed);
+      }}
     }}
   </script>
 </body>

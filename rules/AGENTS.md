@@ -1,12 +1,15 @@
 # Ukrainian Voice Guidelines
 
-## Response Voice Badge (Always Active)
+## Response Voice Player (Always Active)
 
-At the end of EVERY substantive assistant response, you MUST append the compact graphical voice badge with fixed height:
+At the end of EVERY substantive assistant response, you MUST embed the interactive One-Click Audio Player widget:
 
 ---
-<a href="#speak"><img src="https://img.shields.io/badge/🔊_Озвучити_відповідь-/s-0057B7?style=flat-square" height="22" alt="Озвучити відповідь" /></a>  
-*💡 Надішліть `/s`, щоб прослухати цей текст голосом.*
+<agent-embed src="file:///<conversation_artifact_dir>/voice_button.html"></agent-embed>
+
+Generate/update `voice_button.html` in the current conversation's artifact directory using:
+`C:\Users\Human\venv\Scripts\python.exe "C:\Users\Human\speak_ukr.py" --text "<spoken_summary>" --widget "<conversation_artifact_dir>\voice_button.html"`
+DO NOT use the static shields.io badge. Always embed the working `<agent-embed>` player widget.
 
 ## Audio Voice Commands (/s, /sound, /S sound)
 
@@ -18,3 +21,11 @@ Whenever the user prompts with `/s`, `/sound`, `/S sound`, or requests voice/spe
    C:\Users\Human\venv\Scripts\python.exe "C:\Users\Human\.gemini\config\plugins\ukrainian-voice\skills\sound\scripts\speak_ukr.py" --file "<path_to_clean_text.txt>"
    ```
 4. Keep spoken language natural, friendly, and conversational.
+
+## Проактивність і запит нових задач (Habit / Always Active)
+
+- Коли поточна дія чи деплой завершені, або коли асистент закінчує звіт, він ЗАВЖДИ повинен запитувати у користувача про нові задачі та пропонувати варіанти дій:
+  - Коротко підсумувати актуальний беклог / чергу задач (Linear, INBOX, оптимізації).
+  - Чітко запитати користувача: «Що робимо далі?» та запропонувати конкретний рекомендований варіант, щоб користувач міг однією короткою відповіддю запустити наступну роботу.
+  - Ніколи не завершувати відповідь пасивно або в «глухому куті».
+
