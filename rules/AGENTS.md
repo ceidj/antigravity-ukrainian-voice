@@ -2,14 +2,21 @@
 
 ## Response Voice Player (Always Active)
 
-At the end of EVERY substantive assistant response, you MUST embed the interactive One-Click Audio Player widget:
+At the end of EVERY substantive FINAL assistant response to the user, you MUST embed the interactive One-Click Audio Player widget:
 
 ---
-<agent-embed src="file:///<conversation_artifact_dir>/voice_button.html"></agent-embed>
+<agent-embed src="file:///<conversation_artifact_dir>/voice_player.html"></agent-embed>
 
-Generate/update `voice_button.html` in the current conversation's artifact directory using:
-`C:\Users\Human\venv\Scripts\python.exe "C:\Users\Human\speak_ukr.py" --text "<spoken_summary>" --widget "<conversation_artifact_dir>\voice_button.html"`
-DO NOT use the static shields.io badge. Always embed the working `<agent-embed>` player widget.
+### Strict Deduplication & Single-Player Rules (CRITICAL):
+1. **ONLY on Final Responses to the User**:
+   - Embed the player **EXACTLY ONCE** per complete user-directed response.
+   - **NEVER** embed the player in intermediate tool-running steps, progress updates ("waiting for...", "generating..."), or background checks.
+   - **NEVER** generate audio for daemon/watcher/cron wakeups (e.g. inbox-ping, background polls) unless there is an actual completed deliverable/task to report to the user.
+2. **Clean Generation Without Intermediate Text**:
+   - Launch `speak_ukr.py --text "<spoken_summary>" --widget "<conversation_artifact_dir>\voice_player.html"`.
+   - While the command runs in the background, **DO NOT output intermediate user-facing text** like "Waiting for synthesis..." or "I launched the audio task".
+   - Simply wait for the task to complete, and output your final response with the `<agent-embed>` player at the bottom.
+3. **DO NOT use the static shields.io badge**. Always embed the working `<agent-embed>` player widget.
 
 ## Audio Voice Commands (/s, /sound, /S sound)
 
