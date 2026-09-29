@@ -212,7 +212,7 @@ def generate_widget(text: str, output_html_path: str, voice_name: str = None, sp
         duration_secs = max(1.0, len(raw_wav) / (22050 * 2))
 
     # Compress to MP3 (64kbps CBR) via FFmpeg for fast streaming, minimal size & native mobile playback
-    mime_type = "audio/mp3"
+    mime_type = "audio/mpeg"
     b64_audio = ""
     if os.path.exists(FFMPEG_PATH):
         try:
@@ -401,8 +401,9 @@ def generate_widget(text: str, output_html_path: str, voice_name: str = None, sp
   </style>
 </head>
 <body>
+  <audio id="audioPlayer" preload="auto" playsinline webkit-playsinline src="data:{mime_type};base64,{b64_audio}"></audio>
   <div class="player-card">
-    <button id="playBtn" class="play-btn" onclick="togglePlay()" aria-label="Play/Pause">
+    <button id="playBtn" class="play-btn" aria-label="Play/Pause">
       <svg id="playIcon" class="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
       <svg id="pauseIcon" style="display:none;" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
     </button>
@@ -424,30 +425,18 @@ def generate_widget(text: str, output_html_path: str, voice_name: str = None, sp
     </div>
     <div class="badges">
       <span class="voice-badge">🎙️ {voice_title}</span>
-      <button id="speedBtn" class="speed-btn" onclick="cycleSpeed()">{speed}x</button>
+      <button id="speedBtn" class="speed-btn">{speed}x</button>
     </div>
   </div>
 
   <script>
     const b64 = "{b64_audio}";
-    const mime = "{mime_type}";
     const TOTAL_DURATION = {round(duration_secs, 2)};
     let currentSpeed = {speed};
     let isPlaying = false;
 
-    let audio = null;
-    try {{
-      const bin = atob(b64);
-      const u8 = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-      const blob = new Blob([u8], {{ type: mime }});
-      audio = new Audio(URL.createObjectURL(blob));
-      audio.preload = "auto";
-    }} catch (e) {{
-      audio = new Audio("data:" + mime + ";base64," + b64);
-    }}
-    audio.playbackRate = currentSpeed;
-
+    const audio = document.getElementById('audioPlayer');
+    const playBtn = document.getElementById('playBtn');
     const playIcon = document.getElementById('playIcon');
     const pauseIcon = document.getElementById('pauseIcon');
     const visualizer = document.getElementById('visualizer');
@@ -466,6 +455,119 @@ def generate_widget(text: str, output_html_path: str, voice_name: str = None, sp
 
     totalDurationEl.textContent = formatTime(TOTAL_DURATION);
 
+    function updateUI(playing) {{
+      isPlaying = playing;
+      if (playing) {{
+        playIcon.style.display = 'none';
+        pauseIcon.style.display = 'block';
+        visualizer.classList.remove('paused');
+      }} else {{
+        playIcon.style.display = 'block';
+        pauseIcon.style.display = 'none';
+        visualizer.classList.add('paused');
+      }}
+    }}
+
+    // --- Web Audio Fallback Engine ---
+    let audioCtx = null;
+    let audioBuffer = null;
+    let webAudioSource = null;
+    let webAudioStartTime = 0;
+    let webAudioPauseOffset = 0;
+    let isWebAudio = false;
+    let animId = null;
+
+    function getAudioContext() {{
+      if (!audioCtx) {{
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioCtx = new AC();
+      }}
+      if (audioCtx && audioCtx.state === 'suspended') {{
+        audioCtx.resume();
+      }}
+      return audioCtx;
+    }}
+
+    function decodeAndPlayWebAudio(offset) {{
+      const ctx = getAudioContext();
+      if (!ctx) return;
+
+      const startPlayback = () => {{
+        if (!audioBuffer) return;
+        stopWebAudio();
+        webAudioSource = ctx.createBufferSource();
+        webAudioSource.buffer = audioBuffer;
+        webAudioSource.playbackRate.value = currentSpeed;
+        webAudioSource.connect(ctx.destination);
+        webAudioStartTime = ctx.currentTime - (offset / currentSpeed);
+        webAudioSource.start(0, offset);
+        isWebAudio = true;
+        updateUI(true);
+
+        webAudioSource.onended = () => {{
+          if (isWebAudio) {{
+            isWebAudio = false;
+            updateUI(false);
+            webAudioPauseOffset = 0;
+            fill.style.width = '0%';
+            currentTimeEl.textContent = "0:00";
+          }}
+        }};
+        trackWebAudio();
+      }};
+
+      if (audioBuffer) {{
+        startPlayback();
+      }} else {{
+        try {{
+          const bin = atob(b64);
+          const len = bin.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+          ctx.decodeAudioData(bytes.buffer.slice(0), (buf) => {{
+            audioBuffer = buf;
+            startPlayback();
+          }}, (err) => {{
+            console.error("WebAudio decode failed:", err);
+          }});
+        }} catch(e) {{
+          console.error("WebAudio error:", e);
+        }}
+      }}
+    }}
+
+    function stopWebAudio() {{
+      if (webAudioSource) {{
+        try {{
+          webAudioSource.onended = null;
+          webAudioSource.stop();
+        }} catch(e) {{}}
+        webAudioSource = null;
+      }}
+      if (animId) {{
+        cancelAnimationFrame(animId);
+        animId = null;
+      }}
+    }}
+
+    function trackWebAudio() {{
+      if (!isWebAudio || !audioCtx) return;
+      const cur = (audioCtx.currentTime - webAudioStartTime) * currentSpeed;
+      if (cur >= TOTAL_DURATION) {{
+        isWebAudio = false;
+        updateUI(false);
+        webAudioPauseOffset = 0;
+        fill.style.width = '0%';
+        currentTimeEl.textContent = "0:00";
+        return;
+      }}
+      const pct = Math.min(100, Math.max(0, (cur / TOTAL_DURATION) * 100));
+      fill.style.width = pct + '%';
+      currentTimeEl.textContent = formatTime(cur);
+      animId = requestAnimationFrame(trackWebAudio);
+    }}
+
+    // --- HTML5 Audio Handlers ---
     audio.onloadedmetadata = () => {{
       if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {{
         totalDurationEl.textContent = formatTime(audio.duration);
@@ -473,6 +575,7 @@ def generate_widget(text: str, output_html_path: str, voice_name: str = None, sp
     }};
 
     audio.ontimeupdate = () => {{
+      if (isWebAudio) return;
       const dur = (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) ? audio.duration : TOTAL_DURATION;
       if (!dur) return;
       const pct = Math.min(100, Math.max(0, (audio.currentTime / dur) * 100));
@@ -481,55 +584,72 @@ def generate_widget(text: str, output_html_path: str, voice_name: str = None, sp
     }};
 
     audio.onended = () => {{
-      resetUI();
+      updateUI(false);
+      fill.style.width = '0%';
+      currentTimeEl.textContent = "0:00";
     }};
 
+    // --- Play / Pause Toggle ---
     function togglePlay() {{
+      getAudioContext(); // Resume/unlock audio context on user gesture
       if (!isPlaying) {{
         audio.playbackRate = currentSpeed;
         const p = audio.play();
-        if (p && p.then) {{
+        if (p !== undefined) {{
           p.then(() => {{
-            isPlaying = true;
-            playIcon.style.display = 'none';
-            pauseIcon.style.display = 'block';
-            visualizer.classList.remove('paused');
-          }}).catch(err => {{
-            console.error("Audio playback error:", err);
-            resetUI();
+            isWebAudio = false;
+            updateUI(true);
+          }}).catch((err) => {{
+            console.warn("HTML5 audio failed, falling back to WebAudio:", err);
+            decodeAndPlayWebAudio(webAudioPauseOffset);
           }});
         }} else {{
-          isPlaying = true;
-          playIcon.style.display = 'none';
-          pauseIcon.style.display = 'block';
-          visualizer.classList.remove('paused');
+          isWebAudio = false;
+          updateUI(true);
         }}
       }} else {{
-        audio.pause();
-        resetUI();
+        if (isWebAudio) {{
+          if (audioCtx) {{
+            webAudioPauseOffset = (audioCtx.currentTime - webAudioStartTime) * currentSpeed;
+          }}
+          stopWebAudio();
+          isWebAudio = false;
+        }} else {{
+          audio.pause();
+        }}
+        updateUI(false);
       }}
     }}
 
-    function resetUI() {{
-      isPlaying = false;
-      playIcon.style.display = 'block';
-      pauseIcon.style.display = 'none';
-      visualizer.classList.add('paused');
-      if (audio.ended) {{
-        fill.style.width = '0%';
-        currentTimeEl.textContent = "0:00";
-      }}
+    let lastToggle = 0;
+    function handleToggle(e) {{
+      e.stopPropagation();
+      const now = Date.now();
+      if (now - lastToggle < 250) return;
+      lastToggle = now;
+      togglePlay();
     }}
 
+    playBtn.addEventListener('click', handleToggle);
+    playBtn.addEventListener('touchend', handleToggle);
+
+    // --- Seeking ---
     function seek(e) {{
       const rect = track.getBoundingClientRect();
       const clientX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
       const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       const dur = (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) ? audio.duration : TOTAL_DURATION;
-      if (dur) {{
-        audio.currentTime = pct * dur;
-        fill.style.width = (pct * 100) + '%';
-        currentTimeEl.textContent = formatTime(audio.currentTime);
+      const targetTime = pct * dur;
+
+      if (isWebAudio) {{
+        webAudioPauseOffset = targetTime;
+        decodeAndPlayWebAudio(targetTime);
+      }} else {{
+        audio.currentTime = targetTime;
+        if (audio.paused && !isPlaying) {{
+          fill.style.width = (pct * 100) + '%';
+          currentTimeEl.textContent = formatTime(targetTime);
+        }}
       }}
     }}
 
@@ -537,13 +657,21 @@ def generate_widget(text: str, output_html_path: str, voice_name: str = None, sp
     track.addEventListener('touchstart', (e) => {{ seek(e); }}, {{ passive: true }});
     track.addEventListener('touchmove', (e) => {{ seek(e); }}, {{ passive: true }});
 
+    // --- Speed Cycling ---
     const speeds = [1.0, 1.3, 1.5, 1.8];
-    function cycleSpeed() {{
+    function cycleSpeed(e) {{
+      if (e) e.stopPropagation();
       const idx = speeds.indexOf(currentSpeed);
       currentSpeed = speeds[(idx + 1) % speeds.length];
       audio.playbackRate = currentSpeed;
+      if (isWebAudio && webAudioSource) {{
+        webAudioSource.playbackRate.value = currentSpeed;
+      }}
       speedBtn.textContent = currentSpeed + 'x';
     }}
+
+    speedBtn.addEventListener('click', cycleSpeed);
+    speedBtn.addEventListener('touchend', cycleSpeed);
   </script>
 </body>
 </html>
